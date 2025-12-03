@@ -9,8 +9,11 @@ class AnalysisRequest(BaseModel):
 # 响应数据模型
 class AnalysisResponse(BaseModel):
     """用于返回给客户端的数据模型"""
-    orignal_text: str = Field(..., description="原始文本")
+    original_text: str = Field(..., description="原始文本")
     translated_text: str = Field(..., description="翻译后语言")
     sentiment: str = Field(..., description="情感")
     
-    
+class SentimentAnalysisOutput(BaseModel):
+    """LLM 情感分析步骤的 Pydantic 结构"""
+    sentiment_label: str = Field(..., description="情感倾向标签，必须是 'Positive', 'Negative', 或 'Neutral'。")
+    summary: str = Field(..., description="总结")

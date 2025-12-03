@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语言分析助手 - Powered by FastAPI & Ollama</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z' fill='%234285F4'/%3E%3C/svg%3E" type="image/svg+xml">
+    <style>
+        /* Google Fonts - 用于 Gemini 风格的现代字体 */
+        @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap');
+
+        :root {
+            --bg-color: #f8f9fa; /* 亮背景 */
+            --card-bg: #ffffff; /* 卡片背景 */
+            --border-color: #dadce0; /* 边框颜色 */
+            --primary-color: #4285F4; /* Google 蓝 */
+            --text-color: #202124; /* 深灰文本 */
+            --light-text-color: #70757a; /* 浅灰文本 */
+            --shadow-light: rgba(0, 0, 0, 0.1);
+            --shadow-medium: rgba(0, 0, 0, 0.15);
+            --radius: 20px;
+        }
+
+        body {
+            font-family: 'Google Sans', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* 顶部对齐 */
+            min-height: 100vh;
+            overflow-y: auto; /* 允许滚动 */
+            padding-top: 40px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            padding: 30px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2.8em;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 8s ease infinite;
+            background-size: 200% auto;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .header p {
+            font-size: 1.1em;
+            color: var(--light-text-color);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: 0 4px 12px var(--shadow-light);
+            padding: 30px;
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .card:hover {
+            box-shadow: 0 6px 16px var(--shadow-medium);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+            font-size: 1.05em;
+        }
+
+        textarea, select, button {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            font-family: 'Roboto', sans-serif;
+            font-size: 1em;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.2);
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(66, 133, 244, 0.3);
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #357ae8;
+            box-shadow: 0 4px 8px rgba(66, 133, 244, 0.4);
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .results {
+            margin-top: 20px;
+            font-size: 1em;
+            line-height: 1.6;
+        }
+
+        .result-item {
+            margin-bottom: 15px;
+        }
+
+        .result-item strong {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+            font-weight: 500;
+            font-size: 1.1em;
+        }
+
+        .loading-animation {
+            display: none; /* 默认隐藏 */
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .dot-pulse {
+            position: relative;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: var(--primary-color);
+            animation: dot-pulse 1.5s infinite ease-in-out;
+            animation-delay: .2s;
+            margin: 0 auto;
+        }
+
+        .dot-pulse::before, .dot-pulse::after {
+            content: '';
+            display: inline-block;
+            position: absolute;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: var(--primary-color);
+            animation: dot-pulse 1.5s infinite ease-in-out;
+        }
+
+        .dot-pulse::before {
+            left: -15px;
+            animation-delay: 0s;
+        }
+
+        .dot-pulse::after {
+            left: 15px;
+            animation-delay: .4s;
+        }
+
+        @keyframes dot-pulse {
+            0% {
+                transform: scale(0.8);
+                opacity: 0.7;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0.8);
+                opacity: 0.7;
+            }
+        }
+
+        #translatedTextStream {
+            background-color: #e8f0fe; /* 浅蓝背景，区分流式输出 */
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px dashed var(--primary-color);
+            min-height: 50px;
+            margin-bottom: 15px;
+        }
+
+        .error-message {
+            color: #EA4335; /* Google 红 */
+            background-color: #fce8e6;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #EA4335;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                gap: 20px;
+            }
+            .header h1 {
+                font-size: 2em;
+            }
+            .card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>语言分析助手</h1>
+            <p>使用 FastAPI 和 Ollama (Qwen2.5) 提供文本翻译和情感分析。</p>
+        </div>
+
+        <div class="card">
+            <label for="inputText">输入您的文本：</label>
+            <textarea id="inputText" placeholder="请输入要翻译和分析的文本..."></textarea>
+
+            <label for="targetLang">选择目标语言：</label>
+            <select id="targetLang">
+                <option value="en">English</option>
+                <option value="zh-CN" selected>简体中文</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+            </select>
+
+            <button id="analyzeBtn">翻译与分析</button>
+            <button id="streamTranslateBtn">仅流式翻译</button>
+
+            <div class="loading-animation" id="loadingAnimation">
+                <div class="dot-pulse"></div>
+                <p style="margin-top: 10px; color: var(--light-text-color);">AI 正在思考中...</p>
+            </div>
+        </div>
+
+        <div class="card" id="resultsCard" style="display: none;">
+            <label>分析结果：</label>
+            <div class="results">
+                <div class="result-item">
+                    <strong>原始文本：</strong>
+                    <span id="originalTextOutput"></span>
+                </div>
+                <div class="result-item">
+                    <strong>流式翻译输出：</strong>
+                    <div id="translatedTextStream"></div>
+                </div>
+                <div class="result-item">
+                    <strong>情感标签：</strong>
+                    <span id="sentimentLabelOutput"></span>
+                </div>
+                <div class="result-item">
+                    <strong>情感总结：</strong>
+                    <span id="sentimentSummaryOutput"></span>
+                </div>
+            </div>
+            <div class="error-message" id="errorMessage" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const inputText = document.getElementById('inputText');
+        const targetLang = document.getElementById('targetLang');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const streamTranslateBtn = document.getElementById('streamTranslateBtn');
+        const loadingAnimation = document.getElementById('loadingAnimation');
+        const resultsCard = document.getElementById('resultsCard');
+        const originalTextOutput = document.getElementById('originalTextOutput');
+        const translatedTextStream = document.getElementById('translatedTextStream');
+        const sentimentLabelOutput = document.getElementById('sentimentLabelOutput');
+        const sentimentSummaryOutput = document.getElementById('sentimentSummaryOutput');
+        const errorMessage = document.getElementById('errorMessage');
+
+        const API_BASE_URL = 'http://127.0.0.1:8000'; // 你的 FastAPI 后端地址
+
+        function showLoading(show) {
+            loadingAnimation.style.display = show ? 'block' : 'none';
+            analyzeBtn.disabled = show;
+            streamTranslateBtn.disabled = show;
+            errorMessage.style.display = 'none';
+            if (!show) {
+                resultsCard.style.display = 'block';
+            }
+        }
+
+        function resetResults() {
+            originalTextOutput.textContent = '';
+            translatedTextStream.innerHTML = '';
+            sentimentLabelOutput.textContent = '';
+            sentimentSummaryOutput.textContent = '';
+            errorMessage.style.display = 'none';
+            resultsCard.style.display = 'none';
+        }
+
+        // --- 完整翻译与分析 ---
+        analyzeBtn.addEventListener('click', async () => {
+            resetResults();
+            showLoading(true);
+            const text = inputText.value.trim();
+            const lang = targetLang.value;
+
+            if (!text) {
+                errorMessage.textContent = '请输入需要分析的文本！';
+                errorMessage.style.display = 'block';
+                showLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/translate_and_analysis`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text, target_lang: lang })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                originalTextOutput.textContent = data.original_text;
+                // 这里是完整接收后显示
+                translatedTextStream.textContent = data.translated_text; 
+                
+                // 解析嵌套的 JSON 字符串
+                const sentimentData = JSON.parse(data.sentiment); 
+                sentimentLabelOutput.textContent = sentimentData.sentiment_label;
+                sentimentSummaryOutput.textContent = sentimentData.summary;
+
+            } catch (error) {
+                console.error('分析失败:', error);
+                errorMessage.textContent = `分析失败: ${error.message}`;
+                errorMessage.style.display = 'block';
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // --- 仅流式翻译 ---
+        streamTranslateBtn.addEventListener('click', async () => {
+            resetResults();
+            showLoading(true); // 仅显示加载动画
+            resultsCard.style.display = 'block'; // 提前显示结果卡片
+            translatedTextStream.innerHTML = ''; // 清空之前的内容
+            originalTextOutput.textContent = inputText.value.trim(); // 原始文本直接显示
+            
+            // 清空情感分析区域，因为流式翻译不包含情感分析
+            sentimentLabelOutput.textContent = '等待完整翻译后进行分析 (此接口不提供情感分析)';
+            sentimentSummaryOutput.textContent = '';
+
+
+            const text = inputText.value.trim();
+            const lang = targetLang.value;
+
+            if (!text) {
+                errorMessage.textContent = '请输入需要翻译的文本！';
+                errorMessage.style.display = 'block';
+                showLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/translate_stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text, target_lang: lang })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let fullTranslatedText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    translatedTextStream.innerHTML += chunk; // 逐步更新内容
+                    fullTranslatedText += chunk; // 累计完整文本 (如果后续需要)
+                }
+
+            } catch (error) {
+                console.error('流式翻译失败:', error);
+                errorMessage.textContent = `流式翻译失败: ${error.message}`;
+                errorMessage.style.display = 'block';
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // 初始化时隐藏结果卡片
+        document.addEventListener('DOMContentLoaded', resetResults);
+    </script>
+</body>
+</html>

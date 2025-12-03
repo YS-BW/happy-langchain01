@@ -1,6 +1,7 @@
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
-from app.chains.analysis import analysis_chain, translate_chain
+from app.chains.analysis import analysis_chain, finnal_chain, translate_chain
 from app.models.analysis import AnalysisRequest, AnalysisResponse
 
 
@@ -8,25 +9,27 @@ router = APIRouter()
 
 @router.post("/translate_and_analysis",response_model=AnalysisResponse)
 async def translate_and_analysis(request: AnalysisRequest):
-    """
-    接收请求,调用LCEL Chain进行翻译和情感分析
-    """
-    translate_text = await translate_chain.ainvoke(
+
+    response_data = await finnal_chain.ainvoke(
         {
             "text": request.text,
             "target_lang": request.target_lang
         }
     )
-    """
-    情感化分析
-    """
-    sentiment = await analysis_chain.ainvoke(
+
+    return AnalysisResponse(
+        **response_data
+    )
+@router.post("/translate_stream",response_model=AnalysisResponse)
+async def translate_stream(request: AnalysisRequest):
+    response_stream = translate_chain.astream(
         {
-            "translated_text": translate_text
+            "text": request.text,
+            "target_lang": request.target_lang
         }
     )
-    return AnalysisResponse(
-        orignal_text=request.text,               # 关键字参数 1
-        translated_text=translate_text,          # 关键字参数 2
-        sentiment=sentiment    # 关键字参数 3
-    )
+    async def stream_generator():
+        async for chunk in response_stream:
+            yield chunk
+    return StreamingResponse(stream_generator(), media_type="text/explain")
+
